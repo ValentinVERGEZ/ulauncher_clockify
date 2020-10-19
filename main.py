@@ -61,6 +61,18 @@ class KeywordQueryEventListener(EventListener):
                         'message': description
                     })
                 ))
+        if str(query).split(' ')[0] == 'prev':
+            if len(str(query).split(' ')) > 1:
+                description = str(query).partition(' ')[2]
+                items.insert(0, ExtensionResultItem(
+                    icon='images/icon_go.png',
+                    name=description,
+                    description='Insert a new time entry, using this as title and your last entry as a start',
+                    on_enter=ExtensionCustomAction({
+                        'call': 'previous',
+                        'message': description
+                    })
+                ))
         if str(query).split(' ')[0] == 'out':
             items.insert(0, ExtensionResultItem(
                 icon='images/icon_stop.png',
@@ -209,6 +221,26 @@ class ItemEventListener(EventListener):
             return self.notification_action('Could not create new entry', f"Error: HTTP {response.status_code}", 'error')
 
 
+    def set_previous_time_entry(self, message):
+        last_time_entry = self.get_last_time_entry()
+        end = last_time_entry['timeInterval']['end']
+        if end is None:
+            return self.notification_action('Could not create entry', f"Error: A time entry is already active", 'error')
+        (description, tag_ids) = self.process_message(message)
+        payload = {
+            'description': description,
+            'tagIds': tag_ids,
+            'start': end,
+            'projectId': self.__project_id,
+            'end': self.get_now()
+        }
+        response = requests.post(f"{self.__base_workspace_url}/time-entries", json=payload, headers=self.__headers)
+        if response.status_code == 201:
+            return self.notification_action('Registered time entry', description, 'stop')
+        else:
+            return self.notification_action('Could not create new entry', f"Error: HTTP {response.status_code}", 'error')
+
+
     def end_time_entry(self):
         payload = {
             'end': self.get_now()
@@ -263,6 +295,9 @@ class ItemEventListener(EventListener):
 
         elif call == 'resume':
             return self.resume_time_entry()
+
+        elif call == 'previous':
+            return self.set_previous_time_entry(message)
 
         elif call == 'end':
             return self.end_time_entry()
